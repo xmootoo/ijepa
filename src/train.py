@@ -267,8 +267,7 @@ def main(args, resume_preempt=False):
     for epoch in range(start_epoch, num_epochs):
         logger.info('Epoch %d' % (epoch + 1))
 
-        # -- update distributed-data-loader epoch
-        unsupervised_sampler.set_epoch(epoch)
+        # -- update distributed-data-loader epoc0        unsupervised_sampler.set_epoch(epoch)
 
         loss_meter = AverageMeter()
         maskA_meter = AverageMeter()
@@ -294,12 +293,12 @@ def main(args, resume_preempt=False):
 
                 def forward_target():
                     with torch.no_grad():
-                        h = target_encoder(imgs)
+                        h = target_encoder(imgs) # (B, N, context_dim)
                         h = F.layer_norm(h, (h.size(-1),))  # normalize over feature-dim
                         B = len(h)
                         # -- create targets (masked regions of h)
-                        h = apply_masks(h, masks_pred)
-                        h = repeat_interleave_batch(h, B, repeat=len(masks_enc))
+                        h = apply_masks(h, masks_pred) # (B*K, N, context_dim)
+                        h = repeat_interleave_batch(h, B, repeat=len(masks_enc)) # (B*K, N, context_dim), does nothing as len(masks_enc) =1
                         return h
 
                 def forward_context():

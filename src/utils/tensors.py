@@ -69,3 +69,21 @@ def repeat_interleave_batch(x, B, repeat):
         for i in range(N)
     ], dim=0)
     return x
+
+import torch
+
+# Define the tensor x
+B = 2
+N = 3
+pred_dim = 12
+pos_embed = torch.randn(B, N, pred_dim)
+
+# Define the batch size B and the number of repeats
+B = 2
+repeat = 3
+
+# Call the function
+result = repeat_interleave_batch(pos_embed, B, repeat=1)
+
+# Print the result
+print(result)

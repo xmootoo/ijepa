@@ -65,7 +65,7 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     """
     embed_dim: output dimension for each position
     pos: a list of positions to be encoded: size (M,)
-    out: (M, D)
+    out: (M, D)4
     """
     assert embed_dim % 2 == 0
     omega = np.arange(embed_dim // 2, dtype=float)
@@ -283,6 +283,12 @@ class VisionTransformerPredictor(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x, masks_x, masks):
+        """
+        x: The context encoding.
+        masks_x: The context mask.
+        masks: The target masks.
+        """
+
         assert (masks is not None) and (masks_x is not None), 'Cannot run predictor without mask indices'
 
         if not isinstance(masks_x, list):
@@ -295,33 +301,34 @@ class VisionTransformerPredictor(nn.Module):
         B = len(x) // len(masks_x)
 
         # -- map from encoder-dim to pedictor-dim
-        x = self.predictor_embed(x)
+        x = self.predictor_embed(x) # (B, N, pred_dim)
 
         # -- add positional embedding to x tokens
-        x_pos_embed = self.predictor_pos_embed.repeat(B, 1, 1)
-        x += apply_masks(x_pos_embed, masks_x)
+        x_pos_embed = self.predictor_pos_embed.repeat(B, 1, 1) # (B, N, pred_dim)
+        x += apply_masks(x_pos_embed, masks_x) # (B, N, pred_dim)
 
         _, N_ctxt, D = x.shape
 
         # -- concat mask tokens to x
-        pos_embs = self.predictor_pos_embed.repeat(B, 1, 1)
-        pos_embs = apply_masks(pos_embs, masks)
-        pos_embs = repeat_interleave_batch(pos_embs, B, repeat=len(masks_x))
+        pos_embs = self.predictor_pos_embed.repeat(B, 1, 1) # (B, N, pred_dim)
+        pos_embs = apply_masks(pos_embs, masks) # (B, N, pred_dim)
+        pos_embs = repeat_interleave_batch(pos_embs, B, repeat=len(masks_x)) # Does nothing for len(masks_x)=1: (B, N, pred_dim)
+                                                                             # Likely an experimental parameter for number of context masks
         # --
-        pred_tokens = self.mask_token.repeat(pos_embs.size(0), pos_embs.size(1), 1)
+        pred_tokens = self.mask_token.repeat(pos_embs.size(0), pos_embs.size(1), 1) # (B, N, pred_dim)
         # --
-        pred_tokens += pos_embs
-        x = x.repeat(len(masks), 1, 1)
-        x = torch.cat([x, pred_tokens], dim=1)
+        pred_tokens += pos_embs # (B, N, pred_dim)
+        x = x.repeat(len(masks), 1, 1) # (B*K, N, pred_dim)
+        x = torch.cat([x, pred_tokens], dim=1) # (B*K, 2N, pred_dim)
 
         # -- fwd prop
         for blk in self.predictor_blocks:
             x = blk(x)
-        x = self.predictor_norm(x)
+        x = self.predictor_norm(x) # (B*K, 2N, pred_dim)
 
         # -- return preds for mask tokens
-        x = x[:, N_ctxt:]
-        x = self.predictor_proj(x)
+        x = x[:, N_ctxt:] # (B*K, N, pred_dim)
+        x = self.predictor_proj(x) # (B*K, N, context_dim)
 
         return x
 
